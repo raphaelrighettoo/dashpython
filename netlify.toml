@@ -1,0 +1,15 @@
+# Arquivo de configuração para o Netlify
+# Este arquivo força o Netlify a usar os comandos corretos.
+
+[build]
+  # Comando que o Netlify irá executar.
+  # Ele instala as bibliotecas e executa APENAS o script leve.
+  command = "pip install -r requirements.txt && python gerar_dashboard.py"
+
+  # Diretório onde o resultado (index.html) será publicado.
+  # O ponto "." significa o diretório principal.
+  publish = "."
+
+[build.environment]
+  # Define a versão do Python que o Netlify deve usar.
+  PYTHON_VERSION = "3.10"
