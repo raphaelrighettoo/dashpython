@@ -5,7 +5,7 @@ import json
 # --- CONFIGURAÇÃO DAS COLUNAS ---
 # Garanta que estes nomes correspondem EXATAMENTE ao seu ficheiro CSV.
 COLUNA_DATA = 'data da venda'
-COLUNA_VALOR_VENDA = 'Valor total da venda'
+COLUNA_VALOR_VENDA = 'valor total da venda'
 COLUNA_REGIONAL = 'regional'
 COLUNA_CONSULTOR = 'consultor'
 COLUNA_UNIDADE_NEGOCIO = 'unid negocio'
