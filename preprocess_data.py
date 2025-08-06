@@ -21,27 +21,37 @@ try:
 except Exception:
     df = pd.read_csv('dados.csv', sep=',')
 
-print("Ficheiro CSV carregado. Iniciando limpeza...")
+print(f"Ficheiro CSV carregado. {len(df)} linhas encontradas.")
 
-# --- LIMPEZA E PREPARAÇÃO DOS DADOS (VERSÃO ROBUSTA) ---
+# --- LIMPEZA E PREPARAÇÃO DOS DADOS (VERSÃO MAIS SEGURA) ---
+
+# 1. Converte a coluna de data
+print("Convertendo coluna de data...")
 df[COLUNA_DATA] = pd.to_datetime(df[COLUNA_DATA], dayfirst=True, errors='coerce')
 
-numeric_values = pd.to_numeric(df[COLUNA_VALOR_VENDA], errors='coerce')
-text_values = df[COLUNA_VALOR_VENDA][numeric_values.isna()]
-cleaned_values = (
-    text_values.astype(str)
-    .str.replace('R$', '', regex=False)
-    .str.strip()
-    .str.replace('.', '', regex=False)
-    .str.replace(',', '.', regex=False)
-)
-cleaned_numeric = pd.to_numeric(cleaned_values, errors='coerce')
-df[COLUNA_VALOR_VENDA] = numeric_values.fillna(cleaned_numeric)
+# 2. Limpa e converte a coluna de valor para um formato numérico
+print("Limpando e convertendo coluna de valor...")
+# Garante que a coluna é do tipo texto antes de tentar limpar
+df['valor_limpo'] = df[COLUNA_VALOR_VENDA].astype(str)
+# Remove "R$", espaços e pontos de milhar
+df['valor_limpo'] = df['valor_limpo'].str.replace('R$', '', regex=False).str.strip()
+df['valor_limpo'] = df['valor_limpo'].str.replace('.', '', regex=False)
+# Troca a vírgula do decimal por um ponto
+df['valor_limpo'] = df['valor_limpo'].str.replace(',', '.', regex=False)
+# Converte para número, tratando erros (o que não for número vira NaN)
+df[COLUNA_VALOR_VENDA] = pd.to_numeric(df['valor_limpo'], errors='coerce')
 
-# Garante que as colunas essenciais não tenham valores nulos
+
+# 3. Remove linhas onde a conversão de data ou valor falhou
+linhas_antes = len(df)
 df.dropna(subset=[COLUNA_DATA, COLUNA_VALOR_VENDA, COLUNA_TRIMESTRE, COLUNA_ANO], inplace=True)
+linhas_depois = len(df)
 
-print(f"Limpeza concluída. {len(df)} linhas válidas encontradas para processamento.")
+# IMPRESSÃO DE DIAGNÓSTICO: Informa quantas linhas são válidas
+print(f"Limpeza concluída. De {linhas_antes} linhas, {linhas_depois} são válidas e serão processadas.")
+
+if linhas_depois == 0:
+    print("\nATENÇÃO: Nenhuma linha de dados válida foi encontrada após a limpeza. Verifique o formato das colunas de data e valor no seu ficheiro CSV.\n")
 
 # --- CÁLCULO DAS AGREGAÇÕES E SALVAMENTO ---
 
@@ -76,6 +86,7 @@ print("Resumo por unidade de negócio (trimestral) salvo em summary_unidade_trim
 
 # 5. Evolução Trimestral
 df_trimestral = df.groupby(COLUNA_TRIMESTRE)[COLUNA_VALOR_VENDA].sum().reset_index()
+# Cria colunas para ordenação correta dos trimestres (ex: 1Tri23, 2Tri23...)
 df_trimestral['ano'] = '20' + df_trimestral[COLUNA_TRIMESTRE].str.extract(r'(\d+)$').fillna('0')
 df_trimestral['trimestre_num'] = df_trimestral[COLUNA_TRIMESTRE].str.extract(r'(\d+)Tri').fillna('0')
 df_trimestral = df_trimestral.sort_values(by=['ano', 'trimestre_num'])
