@@ -7,7 +7,7 @@ import json
 # --- CONFIGURAÇÃO DAS COLUNAS ---
 # Os nomes aqui devem corresponder aos nomes definidos no script de pré-processamento.
 COLUNA_DATA = 'data da venda'
-COLUNA_VALOR_VENDA = 'Valor total da venda'
+COLUNA_VALOR_VENDA = 'valor total da venda'
 COLUNA_REGIONAL = 'regional'
 COLUNA_CONSULTOR = 'consultor'
 COLUNA_UNIDADE_NEGOCIO = 'unid negocio'
