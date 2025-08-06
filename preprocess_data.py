@@ -5,10 +5,11 @@ import json
 # --- CONFIGURAÇÃO DAS COLUNAS ---
 # Garanta que estes nomes correspondem EXATAMENTE ao seu ficheiro CSV.
 COLUNA_DATA = 'data da venda'
-COLUNA_VALOR_VENDA = 'valor total da venda'
+COLUNA_VALOR_VENDA = 'Valor total da venda'
 COLUNA_REGIONAL = 'regional'
 COLUNA_CONSULTOR = 'consultor'
 COLUNA_UNIDADE_NEGOCIO = 'unid negocio'
+COLUNA_TRIMESTRE = 'trimestre' # Coluna para análise trimestral
 # -----------------------------------
 
 print("Iniciando o pré-processamento dos dados...")
@@ -22,15 +23,9 @@ except Exception:
 print("Ficheiro CSV carregado. Iniciando limpeza...")
 
 # --- LIMPEZA E PREPARAÇÃO DOS DADOS (VERSÃO ROBUSTA) ---
-# 1. Converte a coluna de data
 df[COLUNA_DATA] = pd.to_datetime(df[COLUNA_DATA], dayfirst=True, errors='coerce')
 
-# 2. Tenta converter a coluna de valor para número diretamente.
-# 'coerce' transformará em NaN (Not a Number) o que não for um número puro.
 numeric_values = pd.to_numeric(df[COLUNA_VALOR_VENDA], errors='coerce')
-
-# 3. Para os valores que falharam (são NaN), tenta a limpeza de texto.
-# Isto só afeta as células que não eram números puros (ex: continham "R$").
 text_values = df[COLUNA_VALOR_VENDA][numeric_values.isna()]
 cleaned_values = (
     text_values.astype(str)
@@ -40,19 +35,16 @@ cleaned_values = (
     .str.replace(',', '.', regex=False)
 )
 cleaned_numeric = pd.to_numeric(cleaned_values, errors='coerce')
-
-# 4. Combina os resultados: usa os valores que já eram numéricos
-# e preenche os que não eram com a versão limpa.
 df[COLUNA_VALOR_VENDA] = numeric_values.fillna(cleaned_numeric)
 
-# 5. Remove linhas onde a conversão de data ou valor falhou
-df.dropna(subset=[COLUNA_DATA, COLUNA_VALOR_VENDA], inplace=True)
+# Garante que as colunas essenciais não tenham valores nulos
+df.dropna(subset=[COLUNA_DATA, COLUNA_VALOR_VENDA, COLUNA_TRIMESTRE], inplace=True)
 
 print(f"Limpeza concluída. {len(df)} linhas válidas encontradas para processamento.")
 
 # --- CÁLCULO DAS AGREGAÇÕES E SALVAMENTO ---
 
-# 1. KPIs
+# 1. KPIs (Totais gerais)
 faturamento_total = df[COLUNA_VALOR_VENDA].sum()
 total_contratos = len(df)
 ticket_medio = faturamento_total / total_contratos if total_contratos > 0 else 0
@@ -66,24 +58,28 @@ with open('kpis.json', 'w') as f:
     json.dump(kpis, f)
 print("KPIs salvos em kpis.json")
 
-# 2. Vendas por Regional
-df_regional = df.groupby(COLUNA_REGIONAL)[COLUNA_VALOR_VENDA].sum().sort_values(ascending=False).reset_index()
-df_regional.to_csv('summary_regional.csv', index=False)
-print("Resumo por regional salvo em summary_regional.csv")
+# 2. Vendas por Regional (agora por trimestre)
+df_regional_trimestral = df.groupby([COLUNA_REGIONAL, COLUNA_TRIMESTRE])[COLUNA_VALOR_VENDA].sum().reset_index()
+df_regional_trimestral.to_csv('summary_regional_trimestral.csv', index=False)
+print("Resumo por regional (trimestral) salvo em summary_regional_trimestral.csv")
 
-# 3. Top 10 Consultores
+# 3. Top 10 Consultores (mantido como total geral)
 df_consultor = df.groupby(COLUNA_CONSULTOR)[COLUNA_VALOR_VENDA].sum().nlargest(10).sort_values().reset_index()
 df_consultor.to_csv('summary_consultor.csv', index=False)
 print("Resumo por consultor salvo em summary_consultor.csv")
 
-# 4. Vendas por Unidade de Negócio
-df_unidade = df.groupby(COLUNA_UNIDADE_NEGOCIO)[COLUNA_VALOR_VENDA].sum().reset_index()
-df_unidade.to_csv('summary_unidade.csv', index=False)
-print("Resumo por unidade de negócio salvo em summary_unidade.csv")
+# 4. Vendas por Unidade de Negócio (agora por trimestre)
+df_unidade_trimestral = df.groupby([COLUNA_UNIDADE_NEGOCIO, COLUNA_TRIMESTRE])[COLUNA_VALOR_VENDA].sum().reset_index()
+df_unidade_trimestral.to_csv('summary_unidade_trimestral.csv', index=False)
+print("Resumo por unidade de negócio (trimestral) salvo em summary_unidade_trimestral.csv")
 
-# 5. Evolução Mensal
-df_mensal = df.set_index(COLUNA_DATA).groupby(pd.Grouper(freq='ME'))[COLUNA_VALOR_VENDA].sum().reset_index()
-df_mensal.to_csv('summary_mensal.csv', index=False)
-print("Resumo mensal salvo em summary_mensal.csv")
+# 5. Evolução Trimestral
+df_trimestral = df.groupby(COLUNA_TRIMESTRE)[COLUNA_VALOR_VENDA].sum().reset_index()
+# Cria colunas para ordenação correta dos trimestres (ex: 1Tri23, 2Tri23...)
+df_trimestral['ano'] = '20' + df_trimestral[COLUNA_TRIMESTRE].str.extract(r'(\d+)$').fillna('0')
+df_trimestral['trimestre_num'] = df_trimestral[COLUNA_TRIMESTRE].str.extract(r'(\d+)Tri').fillna('0')
+df_trimestral = df_trimestral.sort_values(by=['ano', 'trimestre_num'])
+df_trimestral.to_csv('summary_trimestral.csv', index=False)
+print("Resumo trimestral salvo em summary_trimestral.csv")
 
 print("Pré-processamento concluído com sucesso!")
