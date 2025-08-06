@@ -3,9 +3,9 @@ import pandas as pd
 import json
 
 # --- CONFIGURAÇÃO DAS COLUNAS ---
-# Garanta que estes nomes correspondem EXATAMENTE ao seu arquivo CSV.
+# Garanta que estes nomes correspondem EXATAMENTE ao seu ficheiro CSV.
 COLUNA_DATA = 'data da venda'
-COLUNA_VALOR_VENDA = 'Valor total da venda'
+COLUNA_VALOR_VENDA = 'valor total da venda'
 COLUNA_REGIONAL = 'regional'
 COLUNA_CONSULTOR = 'consultor'
 COLUNA_UNIDADE_NEGOCIO = 'unid negocio'
@@ -13,20 +13,42 @@ COLUNA_UNIDADE_NEGOCIO = 'unid negocio'
 
 print("Iniciando o pré-processamento dos dados...")
 
-# Carrega o arquivo de dados completo
+# Carrega o ficheiro de dados completo
 try:
     df = pd.read_csv('dados.csv', sep=';')
 except Exception:
     df = pd.read_csv('dados.csv', sep=',')
 
-print("Arquivo CSV carregado. Iniciando limpeza...")
+print("Ficheiro CSV carregado. Iniciando limpeza...")
 
-# --- LIMPEZA E PREPARAÇÃO DOS DADOS ---
+# --- LIMPEZA E PREPARAÇÃO DOS DADOS (VERSÃO ROBUSTA) ---
+# 1. Converte a coluna de data
 df[COLUNA_DATA] = pd.to_datetime(df[COLUNA_DATA], dayfirst=True, errors='coerce')
-df[COLUNA_VALOR_VENDA] = pd.to_numeric(df[COLUNA_VALOR_VENDA], errors='coerce')
+
+# 2. Tenta converter a coluna de valor para número diretamente.
+# 'coerce' transformará em NaN (Not a Number) o que não for um número puro.
+numeric_values = pd.to_numeric(df[COLUNA_VALOR_VENDA], errors='coerce')
+
+# 3. Para os valores que falharam (são NaN), tenta a limpeza de texto.
+# Isto só afeta as células que não eram números puros (ex: continham "R$").
+text_values = df[COLUNA_VALOR_VENDA][numeric_values.isna()]
+cleaned_values = (
+    text_values.astype(str)
+    .str.replace('R$', '', regex=False)
+    .str.strip()
+    .str.replace('.', '', regex=False)
+    .str.replace(',', '.', regex=False)
+)
+cleaned_numeric = pd.to_numeric(cleaned_values, errors='coerce')
+
+# 4. Combina os resultados: usa os valores que já eram numéricos
+# e preenche os que não eram com a versão limpa.
+df[COLUNA_VALOR_VENDA] = numeric_values.fillna(cleaned_numeric)
+
+# 5. Remove linhas onde a conversão de data ou valor falhou
 df.dropna(subset=[COLUNA_DATA, COLUNA_VALOR_VENDA], inplace=True)
 
-print("Limpeza concluída. Calculando agregações...")
+print(f"Limpeza concluída. {len(df)} linhas válidas encontradas para processamento.")
 
 # --- CÁLCULO DAS AGREGAÇÕES E SALVAMENTO ---
 
@@ -36,9 +58,9 @@ total_contratos = len(df)
 ticket_medio = faturamento_total / total_contratos if total_contratos > 0 else 0
 
 kpis = {
-    "faturamento_total": faturamento_total,
-    "total_contratos": total_contratos,
-    "ticket_medio": ticket_medio
+    "faturamento_total": float(faturamento_total),
+    "total_contratos": int(total_contratos),
+    "ticket_medio": float(ticket_medio)
 }
 with open('kpis.json', 'w') as f:
     json.dump(kpis, f)
